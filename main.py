@@ -13,7 +13,7 @@ webInfo = {
         'Connection': 'keep-alive',
         'Authorization': 'Basic c2FiZXI6c2FiZXJfc2VjcmV0',
         'Content-Type': 'application/json;charset=UTF-8',
-        'Blade-Auth': ''
+        'Blade-Auth': None
     },
 
     "requestPayload":{
@@ -25,7 +25,7 @@ webInfo = {
 
 
     "apiData":{
-        'cfgName':'数字航道设备信息整治建筑信息数据to武汉局'
+        'cfgName':'数字航道TO武汉局主中心设备详细信息'
     }
 
 }
@@ -48,9 +48,9 @@ class REdata:
         access_token = result['data']['access_token']
         # @test
         #print(access_token)
-        self.REdata_webInfo["headers['Blade-Auth']"]  = access_token
+        self.REdata_webInfo["headers"]['Blade-Auth'] = access_token
         # @test
-        print(self.REdata_webInfo["headers['Blade-Auth']"])
+        # print(self.REdata_webInfo["headers"])
 
         reps_result = requests.post(self.REdata_webInfo["apiUrl"],
                                     headers=self.REdata_webInfo["headers"],
