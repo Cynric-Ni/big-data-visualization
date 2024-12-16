@@ -131,20 +131,51 @@ class APIClient:
         """获取航道保护工作信息"""
         return self.fetch_data("数字航道TO武汉局主中心航道保护工作信息")
 
+    def save_to_json(self, data, filename):
+        """
+        保存数据到JSON文件
+        :param data: 要保存的数据
+        :param filename: 文件名（不需要.json后缀）
+        """
+        try:
+            # 确保文件名以.json结尾
+            if not filename.endswith('.json'):
+                filename = f"{filename}.json"
+
+            # 添加时间戳到文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{filename.rsplit('.', 1)[0]}_{timestamp}.json"
+
+            # 保存数据
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            logging.info(f"数据已保存到文件: {filename}")
+            return filename
+        except Exception as e:
+            logging.error(f"保存JSON文件时出错: {str(e)}")
+            raise
 
 # 使用示例
 if __name__ == "__main__":
     try:
-        # 使用您原有的webInfo配置创建客户端
         client = APIClient(webInfo)
 
-        # 获取设备详细信息
+        # 获取并保存设备详细信息
         device_details = client.get_device_details()
-        print("设备详细信息:", device_details)
+        client.save_to_json(device_details, "device_details")
 
-        # 获取设备使用信息
+        # 获取并保存设备使用信息
         device_usage = client.get_device_usage()
-        print("设备使用信息:", device_usage)
+        client.save_to_json(device_usage, "device_usage")
+
+        # 获取并保存设备领用记录
+        device_records = client.get_device_records()
+        client.save_to_json(device_records, "device_records")
+
+        # 获取并保存航道保护工作信息
+        channel_protection = client.get_channel_protection()
+        client.save_to_json(channel_protection, "channel_protection")
 
     except Exception as e:
         logging.error(f"程序执行错误: {str(e)}")
