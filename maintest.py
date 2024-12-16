@@ -1,7 +1,8 @@
-#from flask import Flask, render_template, request, jsonify
+import logging
+import time
 import requests
 import json
-
+from datetime import datetime
 #爬取网站所需的东西
 webInfo = {
     "tokenURL":"http://172.18.100.216/api/blade-auth/ext/api/api/oauth/token",
@@ -29,53 +30,12 @@ webInfo = {
     }
 
 }
-
-class REdata:
-    REdata_webInfo = {}
-    #REdata_rep = {}
-
-
-    def __init__(self,webinfo):
-        self.REdata_webInfo = webinfo
-
-    def rep(self):
-        rep_token = requests.post(self.REdata_webInfo["tokenURL"],
-                                  headers=self.REdata_webInfo["headers"],
-                                  json=self.REdata_webInfo["requestPayload"])
-        # @test
-        print(rep_token.text)
-        result = json.loads(rep_token.text)
-        access_token = result['data']['access_token']
-        # @test
-        #print(access_token)
-        self.REdata_webInfo["headers"]['Blade-Auth'] = access_token
-        # @test
-        # print(self.REdata_webInfo["headers"])
-
-        reps_result = requests.post(self.REdata_webInfo["apiUrl"],
-                                    headers=self.REdata_webInfo["headers"],
-                                    json=self.REdata_webInfo["apiData"])
-        reps = reps_result.json()
-        # @test
-        # print(type(rep))
-        webInfo["headers['Blade-Auth']"] = ''
-        return reps
-
-redata = REdata(webInfo)
-
-rep1 = redata.rep()
-
-print(rep1)
-
-import logging
-import time
-from datetime import datetime
-
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
 
 class DataCache:
     def __init__(self, expire_time=300):  # 5分钟过期
@@ -91,6 +51,7 @@ class DataCache:
 
     def set(self, key, data):
         self.cache[key] = (data, time.time())
+
 
 class APIClient:
     def __init__(self, webinfo):
@@ -120,7 +81,7 @@ class APIClient:
         """获取有效的token"""
         current_time = time.time()
         if not self.token or not self.token_timestamp or \
-           current_time - self.token_timestamp > 3600:  # token 1小时后刷新
+                current_time - self.token_timestamp > 3600:  # token 1小时后刷新
             self.token = self._get_token()
             self.token_timestamp = current_time
         return self.token
@@ -170,51 +131,20 @@ class APIClient:
         """获取航道保护工作信息"""
         return self.fetch_data("数字航道TO武汉局主中心航道保护工作信息")
 
-    def save_to_json(self, data, filename):
-        """
-        保存数据到JSON文件
-        :param data: 要保存的数据
-        :param filename: 文件名（不需要.json后缀）
-        """
-        try:
-            # 确保文件名以.json结尾
-            if not filename.endswith('.json'):
-                filename = f"{filename}.json"
-            
-            # 添加时间戳到文件名
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{filename.rsplit('.', 1)[0]}_{timestamp}.json"
-            
-            # 保存数据
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            
-            logging.info(f"数据已保存到文件: {filename}")
-            return filename
-        except Exception as e:
-            logging.error(f"保存JSON文件时出错: {str(e)}")
-            raise
 
 # 使用示例
 if __name__ == "__main__":
     try:
+        # 使用您原有的webInfo配置创建客户端
         client = APIClient(webInfo)
-        
-        # 获取并保存设备详细信息
+
+        # 获取设备详细信息
         device_details = client.get_device_details()
-        client.save_to_json(device_details, "device_details")
-        
-        # 获取并保存设备使用信息
+        print("设备详细信息:", device_details)
+
+        # 获取设备使用信息
         device_usage = client.get_device_usage()
-        client.save_to_json(device_usage, "device_usage")
-        
-        # 获取并保存设备领用记录
-        device_records = client.get_device_records()
-        client.save_to_json(device_records, "device_records")
-        
-        # 获取并保存航道保护工作信息
-        channel_protection = client.get_channel_protection()
-        client.save_to_json(channel_protection, "channel_protection")
-        
+        print("设备使用信息:", device_usage)
+
     except Exception as e:
         logging.error(f"程序执行错误: {str(e)}")
