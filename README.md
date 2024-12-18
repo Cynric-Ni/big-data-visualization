@@ -54,6 +54,50 @@ project/
   - `WY-analysis`：外业分析（HSMJZJ / WY-DAYS）
   - `NY-analysis`：内业分析（HSMJZJ / NY-DAYS）
 
+## 核心函数说明
+
+### 数据库操作函数
+
+#### 主要处理函数
+- `process_and_save_to_db(filtered_data_by_area)`: 主要的数据库处理函数，负责连接数据库并处理外业和内业分析数据
+- `handle_wy_analysis(cursor, filtered_data_by_area, current_time)`: 处理外业分析数据，包括创建表和插入数据
+- `handle_ny_analysis(cursor, filtered_data_by_area, current_time)`: 处理内业分析数据，包括创建表和插入数据
+
+#### 数据表操作
+- `setup_table(cursor, table_name)`: 创建或重建数据表（'wy_analysis' 或 'ny_analysis'）
+
+#### 数据处理函数
+- `process_wy_data(cursor, filtered_data_by_area, current_time)`: 处理外业数据并��结果插入数据库
+- `process_ny_data(cursor, filtered_data_by_area, current_time)`: 处理内业数据并将结果插入数据库
+
+#### 数据统计函数
+- `count_wy_analysis(rows)`: 统计外业分析数据的各等级数量
+  - 评分标准：
+    - ≥ 8: 优秀
+    - ≥ 4: 良好
+    - ≥ 2: 一般
+    - < 2: 差
+- `count_ny_analysis(rows)`: 统计内业分析数据的各等级数量
+  - 评分标准：
+    - ≥ 4: 优秀
+    - ≥ 2.6: 良好
+    - ≥ 1.6: 一般
+    - < 1.6: 差
+
+#### 数据库访问函数
+- `insert_analysis_data(cursor, table, area, counts, current_time)`: 将分析结果插入数据库
+- `get_analysis_data()`: 从数据库获取分析结果
+- `fetch_analysis_data(cursor, table_name)`: 从指定表中获取分析数据
+
+### 处理流程
+1. 通过 `process_and_save_to_db` 连接数据库并启动处理流程
+2. 分别通过 `handle_wy_analysis` 和 `handle_ny_analysis` 处理外业和内业数据
+3. 使用 `setup_table` 创建必要的数据表
+4. 通过 `process_wy_data` 和 `process_ny_data` 处理具体数据
+5. 使用 `count_wy_analysis` 和 `count_ny_analysis` 进行数据统计
+6. 通过 `insert_analysis_data` 将结果存入数据库
+7. 可以通过 `get_analysis_data` 和 `fetch_analysis_data` 获取分析结果
+
 ## 配置说明
 - `config.py`：包含API接口配置
 - `credentials.json`：存储API访问凭证
@@ -68,3 +112,71 @@ project/
 - 需要正确配置API访问凭证
 - 确保网络连接正常
 - 数据处理过程中会自动进行数据类型转换
+
+## 代码重构分析
+
+### 类封装建议
+
+#### 优点：
+1. **状态管理更清晰**
+   - 数据库配置可以作为类的属性
+   - 数据库连接可以更好地管理生命周期
+   - 可以避免重复创建数据库连接
+
+2. **更好的组织结构**
+   - 相关的函数可以更好地组织在一起
+   - 可以将外业和内业分析分成不同的子类
+   - 更容易实现依赖注入
+
+3. **更容易扩展**
+   - 可以通过继承来添加新的分析方法
+   - 更容易添加新的数据处理策略
+   - 更容易实现接口模式
+
+4. **更好的封装性**
+   - 可以控制内部实现的访问
+   - 提供更清晰的公共接口
+   - 更好的数据隐藏
+
+#### 可能的类结构：
+```python
+class DataAnalyzer:
+    def __init__(self, db_config):
+        self.db_config = db_config
+        self.connection = None
+
+class FieldworkAnalyzer(DataAnalyzer):
+    # 处理外业相关的分析
+
+class OfficeWorkAnalyzer(DataAnalyzer):
+    # 处理内业相关的分析
+
+class DatabaseManager:
+    # 处理数据库连接和基本操作
+```
+
+### 重构建议
+考虑到当前代码的功能和复杂度，建议采用一个中等程度的封装：
+
+1. 创建一个主要的 `DataAnalyzer` 类，包含：
+   - 数据库配置和连接管理
+   - 数据处理方法
+   - 分析功能
+
+2. 保持现有的函数结构，但将它们组织在类中
+3. 使用类属性存储配置信息
+4. 提供清晰的公共接口
+
+这样可以在获得面向对象编程好处的同时，避免过度设计。
+
+#### 潜在的问题：
+1. **可能过度设计**
+   - 当前的功能可能不需要这么复杂的结构
+   - 可能增加代码的复杂性
+
+2. **性能考虑**
+   - 类的实例化可能带来额外开销
+   - 需要考虑内存使用
+
+
+
