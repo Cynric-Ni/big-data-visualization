@@ -77,13 +77,33 @@ class DataAnalyzer:
         self.cursor.execute(create_table_sql)
 
     def _process_wy_data(self, filtered_data_by_area, current_time):
-        """处理外业数据"""
+        """
+        处理外业数据，并跟踪最大WY-analysis值
+        """
         data = {'excellent': [], 'good': [], 'average': [], 'poor': []}
+        max_wy_analysis = float('-inf')  # 初始化最大值
+        max_info = None  # 记录最大值相关信息
+        
         for area, rows in filtered_data_by_area.items():
+            # 检查每个区域的每条记录
+            for row in rows:
+                wy_analysis = row.get("WY-analysis")
+                if wy_analysis and wy_analysis > max_wy_analysis:
+                    max_wy_analysis = wy_analysis
+                    max_info = {
+                        'area': area,
+                        'value': wy_analysis,
+                        'RWMC': row.get('RWMC'),  # 任务名称
+                        'CHDD': row.get('CHDD'),  # 测绘地点
+                        'date': row.get('CGWYJS')  # 外业结束时间
+                    }
+            
             counts = self._count_wy_analysis(rows)
             self._insert_analysis_data('wy_analysis', area, counts, current_time)
             for key in data:
                 data[key].append(counts[key])
+        
+        data['max_analysis'] = max_info  # 添加最大值信息到返回数据
         return data
 
     def _process_ny_data(self, filtered_data_by_area, current_time):
@@ -140,12 +160,23 @@ class DataAnalyzer:
                                 counts['average'], counts['poor'], current_time))
 
     def get_analysis_data(self):
-        """获取分析数据"""
+        """获取分析数据，包括最大值信息"""
         try:
             with self:
                 wy_data = self._fetch_analysis_data('wy_analysis')
                 ny_data = self._fetch_analysis_data('ny_analysis')
-                return [wy_data, ny_data]
+                
+                # 获取外业分析的最大值信息
+                sql = """
+                SELECT area, excellent_count, good_count, average_count, poor_count 
+                FROM wy_analysis 
+                ORDER BY (excellent_count + good_count) DESC 
+                LIMIT 1
+                """
+                self.cursor.execute(sql)
+                max_area_result = self.cursor.fetchone()
+                
+                return [wy_data, ny_data, max_area_result]
         except Exception as e:
             print(f"获取分析数据错误: {str(e)}")
             return None
@@ -293,6 +324,8 @@ def main():
             print("\n=== 分析结果 ===")
             print("外业分析数据:", analysis_results[0])
             print("内业分析数据:", analysis_results[1])
+            if analysis_results[2]:  # 打印最佳表现区域信息
+                print("\n最佳表现区域信息:", analysis_results[2])
 
     except Exception as e:
         print(f"Error: {str(e)}")
