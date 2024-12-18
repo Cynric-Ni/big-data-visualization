@@ -77,33 +77,13 @@ class DataAnalyzer:
         self.cursor.execute(create_table_sql)
 
     def _process_wy_data(self, filtered_data_by_area, current_time):
-        """
-        处理外业数据，并跟踪最大WY-analysis值
-        """
+        """处理外业数据"""
         data = {'excellent': [], 'good': [], 'average': [], 'poor': []}
-        max_wy_analysis = float('-inf')  # 初始化最大值
-        max_info = None  # 记录最大值相关信息
-        
         for area, rows in filtered_data_by_area.items():
-            # 检查每个区域的每条记录
-            for row in rows:
-                wy_analysis = row.get("WY-analysis")
-                if wy_analysis and wy_analysis > max_wy_analysis:
-                    max_wy_analysis = wy_analysis
-                    max_info = {
-                        'area': area,
-                        'value': wy_analysis,
-                        'RWMC': row.get('RWMC'),  # 任务名称
-                        'CHDD': row.get('CHDD'),  # 测绘地点
-                        'date': row.get('CGWYJS')  # 外业结束时间
-                    }
-            
             counts = self._count_wy_analysis(rows)
             self._insert_analysis_data('wy_analysis', area, counts, current_time)
             for key in data:
                 data[key].append(counts[key])
-        
-        data['max_analysis'] = max_info  # 添加最大值信息到返回数据
         return data
 
     def _process_ny_data(self, filtered_data_by_area, current_time):
@@ -160,23 +140,12 @@ class DataAnalyzer:
                                 counts['average'], counts['poor'], current_time))
 
     def get_analysis_data(self):
-        """获取分析数据，包括最大值信息"""
+        """获取分析数据"""
         try:
             with self:
                 wy_data = self._fetch_analysis_data('wy_analysis')
                 ny_data = self._fetch_analysis_data('ny_analysis')
-                
-                # 获取外业分析的最大值信息
-                sql = """
-                SELECT area, excellent_count, good_count, average_count, poor_count 
-                FROM wy_analysis 
-                ORDER BY (excellent_count + good_count) DESC 
-                LIMIT 1
-                """
-                self.cursor.execute(sql)
-                max_area_result = self.cursor.fetchone()
-                
-                return [wy_data, ny_data, max_area_result]
+                return [wy_data, ny_data]
         except Exception as e:
             print(f"获取分析数据错误: {str(e)}")
             return None
@@ -196,7 +165,7 @@ def main():
         survey_data = client.get_data("数字航道武汉测绘基本信息及成果资料to武汉局")
         workload_data = client.get_data("数字航道武汉测绘工作量数据to武汉局")
         
-        # 保存原始数据
+        # 保���原始数据
         client.save_to_json(workload_data, "测绘工作量")
         client.save_to_json(survey_data, "测绘基本信息")
 
@@ -282,6 +251,10 @@ def main():
                     if area in filtered_data_by_area:
                         filtered_data_by_area[area].append(row)
 
+        # 在计算最终指标的循环中添加最大值跟踪
+        max_wy_analysis = float('-inf')
+        max_info = None
+
         # 计算最终指标
         for area, rows in filtered_data_by_area.items():
             for row in rows:
@@ -300,6 +273,18 @@ def main():
                     if "HSMJZJ" in row:
                         row["WY-analysis"] = row["HSMJZJ"] / row["WY-DAYS"]
                         row["NY-analysis"] = row["HSMJZJ"] / row["NY-DAYS"]
+                        
+                        # 在这里添加最大值比较
+                        if row["WY-analysis"] > max_wy_analysis:
+                            max_wy_analysis = row["WY-analysis"]
+                            max_info = {
+                                '区域': area,
+                                'WY-analysis值': row["WY-analysis"],
+                                '任务名称': row.get('RWMC'),
+                                '测绘地点': row.get('CHDD'),
+                                '外业开始时间': row.get('CGWYKS'),
+                                '外业结束时间': row.get('CGWYJS')
+                            }
 
         # 保存处理后的数据
         try:
@@ -315,6 +300,14 @@ def main():
         analyzer.process_and_save_to_db(filtered_data_by_area)
         print("数据已成功保存到数据库")
 
+        # 打印最大值信息
+        print("\n=== 最大外业分析值信息 ===")
+        if max_info:
+            for key, value in max_info.items():
+                print(f"{key}: {value}")
+        else:
+            print("未找到有效的外业分析值")
+
         # 获取分析数据
         print("\n=== 获取分析数据 ===")
         analysis_results = analyzer.get_analysis_data()
@@ -324,8 +317,6 @@ def main():
             print("\n=== 分析结果 ===")
             print("外业分析数据:", analysis_results[0])
             print("内业分析数据:", analysis_results[1])
-            if analysis_results[2]:  # 打印最佳表现区域信息
-                print("\n最佳表现区域信息:", analysis_results[2])
 
     except Exception as e:
         print(f"Error: {str(e)}")
