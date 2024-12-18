@@ -169,6 +169,10 @@ class APIClient:
     def get_channel_protection(self):
         """获取航道保护工作信息"""
         return self.fetch_data("数字航道TO武汉局主中心航道保护工作信息")
+    
+    def get_survey_info(self):
+        """获取武汉测绘基本信息及成果资料"""
+        return self.fetch_data("数字航道武汉测绘基本信息及成果资料to武汉局")
 
     def save_to_json(self, data, filename):
         """
@@ -215,6 +219,10 @@ if __name__ == "__main__":
         # 获取并保存航道保护工作信息
         channel_protection = client.get_channel_protection()
         client.save_to_json(channel_protection, "channel_protection")
+        
+        # 获取并保存武汉测绘基本信息及成果资料
+        survey_info = client.get_survey_info()
+        client.save_to_json(survey_info, "survey_info")
         
     except Exception as e:
         logging.error(f"程序执行错误: {str(e)}")
