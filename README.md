@@ -67,7 +67,7 @@ project/
 - `setup_table(cursor, table_name)`: 创建或重建数据表（'wy_analysis' 或 'ny_analysis'）
 
 #### 数据处理函数
-- `process_wy_data(cursor, filtered_data_by_area, current_time)`: 处理外业数据并��结果插入数据库
+- `process_wy_data(cursor, filtered_data_by_area, current_time)`: 处理外业数据并结果插入数据库
 - `process_ny_data(cursor, filtered_data_by_area, current_time)`: 处理内业数据并将结果插入数据库
 
 #### 数据统计函数
@@ -177,6 +177,68 @@ class DatabaseManager:
 2. **性能考虑**
    - 类的实例化可能带来额外开销
    - 需要考虑内存使用
+
+## 新增需求分析
+
+### 数据表设计分析
+#### 表结构
+- 主键：ID（自增）
+- 外键：可能不需要，因为是独立的统计表
+- 字段类型：
+  - ID: INT (AUTO_INCREMENT)
+  - 区域代码(ZXDW_ID): VARCHAR(10)
+  - 任务名称(RWMC): VARCHAR(255)
+  - 测绘单位: VARCHAR(50)
+  - 测量日期(CGWYKS): DATE
+  - 工作量: DECIMAL(10,2)
+  - 外业效率: DECIMAL(10,2)
+  - 内业效率: DECIMAL(10,2)
+
+### 数据来源分析
+- 主要来源：filtered_data_by_area.json
+- 已确认的映射：
+  - ZXDW_ID -> 区域代码
+  - RWMC -> 任务名称
+  - CGWYKS -> 测量日期
+- 待确认的字段：
+  - 测绘单位
+  - 工作量
+  - 外业效率
+  - 内业效率
+
+### 实现策略建议
+1. 在 DataAnalyzer 类中添加新的方法
+2. 使用上下文管理器确保数据库操作的安全性
+3. 添加数据验证和错误处理
+4. 考虑批量插入以提高性能
+
+### 潜在问题和注意事项
+1. 数据类型转换
+   - 特别是日期格式的处理
+   - 数值类型的精度控制
+2. 空值处理
+   - 确定每个字段的默认值
+   - 处理缺失数据的策略
+3. 字符编码
+   - 确保中文支持
+   - 统一使用 UTF-8 编码
+4. 数据重复处理
+   - 定义唯一性约束
+   - 处理重复数据的策略
+5. 错误处理机制
+   - 数据验证
+   - 异常捕获和日志记录
+
+### 扩展性考虑
+1. 表结构设计
+   - 考虑未来可能的字段扩展
+   - 预留足够的字段长度
+2. 接口设计
+   - 预留接口以便添加新的数据处理逻辑
+   - 保持代码的模块化
+3. 数据更新机制
+   - 考虑数据的更新策略
+   - 版本控制机制
 
 
 

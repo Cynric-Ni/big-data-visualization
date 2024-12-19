@@ -22,4 +22,13 @@ webInfo = {
     "apiData": {
         'cfgName': '数字航道TO武汉局主中心设备详细信息'
     }
+}
+
+# 数据库配置信息
+dbConfig = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': '123456',
+    'database': '数字航道质量评估结果',
+    'port': 3306
 } 

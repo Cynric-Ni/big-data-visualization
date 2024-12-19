@@ -1,5 +1,5 @@
 import login_fetch_data
-from config import webInfo
+from config import webInfo, dbConfig
 import json
 from datetime import datetime, timedelta
 import pymysql
@@ -9,13 +9,7 @@ class DataAnalyzer:
     
     def __init__(self):
         """初始化数据分析器，设置数据库配置"""
-        self.db_config = {
-            'host': 'localhost',
-            'user': 'root',
-            'password': '123456',
-            'database': '数字航道质量评估结果',
-            'port': 3306
-        }
+        self.db_config = dbConfig
         self.connection = None
         self.cursor = None
 
@@ -165,7 +159,7 @@ def main():
         survey_data = client.get_data("数字航道武汉测绘基本信息及成果资料to武汉局")
         workload_data = client.get_data("数字航道武汉测绘工作量数据to武汉局")
         
-        # 保���原始数据
+        # 保存原始数据
         client.save_to_json(workload_data, "测绘工作量")
         client.save_to_json(survey_data, "测绘基本信息")
 
@@ -251,20 +245,51 @@ def main():
                     if area in filtered_data_by_area:
                         filtered_data_by_area[area].append(row)
 
-        # 在计算最终指标的循环中添加最大值跟踪
-        max_wy_analysis = float('-inf')
-        max_info = None
+        # 在计算最终指标的循环之前添加映射字典
+        AREA_TO_UNIT_MAP = {
+            '010512': '大沙航道处',
+            '010513': '簰洲航道处',
+            '010514': '金口航道处',
+            '010511': '武汉航道处',
+            '010515': '阳逻航道处',
+            '010517': '黄冈航道处',
+            '010516': '黄石航道处',
+            '010518': '蕲州航道处',
+            '01051107': '武汉测绘中心',
+            '01051607': '黄石测绘中心'
+        }
 
-        # 计算最终指标
+        # 初始化统计变量
+        wy_statistics = {'优': 0, '良': 0, '中': 0, '差': 0}
+        ny_statistics = {'优': 0, '良': 0, '中': 0, '差': 0}
+
+        # 第一次遍历：找到最大值
+        max_wy_analysis = float('-inf')
+        max_ny_analysis = float('-inf')
+        max_wy_info = None
+        max_ny_info = None
+        count_hsmj = 0
         for area, rows in filtered_data_by_area.items():
             for row in rows:
+                # 添加测绘单位信息
+                row['CHDW'] = AREA_TO_UNIT_MAP.get(area, '未知单位')
+                
+                # 原有的计算逻辑
                 hsmj_values = row.get('HSMJ')
                 if hsmj_values:
                     if isinstance(hsmj_values, list):
                         hsmj_sum = sum(hsmj_values)
+                        row["REAL_HSMJZJ"] = hsmj_sum
                         row["HSMJZJ"] = max(hsmj_sum, 8)
+                        # 添加判断条件
+                        if "RWSBH" in row and any(keyword in str(row["RWSBH"]) for keyword in ["应急", "维护", "疏浚"]):
+                            count_hsmj += hsmj_sum
                     else:
                         row["HSMJZJ"] = max(float(hsmj_values), 8)
+                        row["REAL_HSMJZJ"] = float(hsmj_values)
+                        # 添加判断条件
+                        if "RWSBH" in row and any(keyword in str(row["RWSBH"]) for keyword in ["应急", "维护", "疏浚"]):
+                            count_hsmj += float(hsmj_values)
 
                 if all(key in row and row[key] is not None for key in ["CGWYKS", "CGWYJS", "CGTJSJ"]):
                     row["WY-DAYS"] = (row["CGWYJS"] - row["CGWYKS"]).days + 1
@@ -274,10 +299,10 @@ def main():
                         row["WY-analysis"] = row["HSMJZJ"] / row["WY-DAYS"]
                         row["NY-analysis"] = row["HSMJZJ"] / row["NY-DAYS"]
                         
-                        # 在这里添加最大值比较
+                        # 更新最大值
                         if row["WY-analysis"] > max_wy_analysis:
                             max_wy_analysis = row["WY-analysis"]
-                            max_info = {
+                            max_wy_info = {
                                 '区域': area,
                                 'WY-analysis值': row["WY-analysis"],
                                 '任务名称': row.get('RWMC'),
@@ -285,6 +310,52 @@ def main():
                                 '外业开始时间': row.get('CGWYKS'),
                                 '外业结束时间': row.get('CGWYJS')
                             }
+                        if row["NY-analysis"] > max_ny_analysis:
+                            max_ny_analysis = row["NY-analysis"]
+                            max_ny_info = {
+                                '区域': area,
+                                'NY-analysis值': row["NY-analysis"],
+                                '任务名称': row.get('RWMC'),
+                                '测绘地点': row.get('CHDD'),
+                                '外业开始时间': row.get('CGWYKS'),
+                                '外业结束时间': row.get('CGWYJS')
+                            }
+
+        # 第二次遍历：计算效率
+        for area, rows in filtered_data_by_area.items():
+            for row in rows:
+                if "WY-analysis" in row:
+                    # 计算外业效率
+                    wy_value = row["WY-analysis"]
+                    if wy_value >= 8:
+                        row['外业效率'] = 1 + (wy_value - 8)/max_wy_analysis
+                        wy_statistics['优'] += 1
+                    elif wy_value >= 4:
+                        row['外业效率'] = (wy_value - 4)/4
+                        wy_statistics['良'] += 1
+                    elif wy_value >= 2:
+                        row['外业效率'] = (wy_value - 2)/2 - 1
+                        wy_statistics['中'] += 1
+                    else:
+                        row['外业效���'] = wy_value/2 - 2
+                        wy_statistics['差'] += 1
+
+                if "NY-analysis" in row:
+                    # 计算内业效率
+                    ny_value = row["NY-analysis"]
+                    if ny_value >= 4:
+                        denominator = 1 if max_ny_analysis - 4 == 0 else max_ny_analysis - 4
+                        row['内业效率'] = 1 + (ny_value - 4)/denominator
+                        ny_statistics['优'] += 1
+                    elif ny_value >= 2.6:
+                        row['内业效率'] = (ny_value - 2.6)/(1.4)
+                        ny_statistics['良'] += 1
+                    elif ny_value >= 1.6:
+                        row['内业效率'] = (ny_value - 1.6)-1
+                        ny_statistics['中'] += 1
+                    else:
+                        row['内业效率'] = ny_value/1.6-2
+                        ny_statistics['差'] += 1
 
         # 保存处理后的数据
         try:
@@ -302,11 +373,23 @@ def main():
 
         # 打印最大值信息
         print("\n=== 最大外业分析值信息 ===")
-        if max_info:
-            for key, value in max_info.items():
+        if max_wy_info:
+            for key, value in max_wy_info.items():
                 print(f"{key}: {value}")
         else:
             print("未找到有效的外业分析值")
+        print("\n=== 最大内业分析值信息 ===")
+        if max_ny_info:
+            for key, value in max_ny_info.items():
+                print(f"{key}: {value}")
+        else:
+            print("未找到有效的内业分析值")
+        print("\n=== 外业效率统计 ===")
+        for key, value in wy_statistics.items():
+            print(f"{key}: {value}")
+        print("\n=== 内业效率统计 ===")
+        for key, value in ny_statistics.items():
+            print(f"{key}: {value}")
 
         # 获取分析数据
         print("\n=== 获取分析数据 ===")
@@ -317,6 +400,9 @@ def main():
             print("\n=== 分析结果 ===")
             print("外业分析数据:", analysis_results[0])
             print("内业分析数据:", analysis_results[1])
+        
+        print("\n=== 真实的换算面积总计 ===")
+        print(f"总测绘面积: {count_hsmj}")
 
     except Exception as e:
         print(f"Error: {str(e)}")
